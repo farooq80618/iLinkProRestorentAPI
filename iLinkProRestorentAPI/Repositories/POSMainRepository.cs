@@ -20,11 +20,15 @@ namespace iLinkProRestorentAPI.Repositories
             _configuration = configuration;
         }
 
-        public async Task<Tuple<int, string, List<CategoryDTO>>> GetCategoryAsync()
+        public async Task<Tuple<int, string, List<CategoryDTO>>> GetCategoryAsync(string? filter)
         {
             try
             {
-                var registrationQuery = @"
+                string strFilter = "";
+                if(filter != null) 
+                    if(Convert.ToString(filter).Length > 0)
+                        strFilter = $" And Category.CategoryName like '%{filter}%' ";
+                var registrationQuery = @$"
                     SELECT DISTINCT 
                           RTRIM(Category.CategoryName) AS CategoryName, 
                           Category.Cat_ID, 
@@ -35,6 +39,7 @@ namespace iLinkProRestorentAPI.Repositories
                           ON Category.CategoryName = CategoryDays.CategoryName
                       WHERE 
                           Category.CategoryName <> 'Pizza' 
+                          {strFilter}
                           AND Category.CatStatus = 'Active'  
                           AND Category.CategoryName <> 'Taxable/Non-Taxable'
                           AND (

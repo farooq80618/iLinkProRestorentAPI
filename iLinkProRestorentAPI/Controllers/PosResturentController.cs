@@ -19,9 +19,9 @@ namespace iLinkProRestorentAPI.Controllers
         }
   
         [HttpGet("GetCategoryAsync")]
-        public async Task<IActionResult> GetCategoryAsync()
+        public async Task<IActionResult> GetCategoryAsync(string? filter)
         {
-            var check = await _repo.GetCategoryAsync();
+            var check = await _repo.GetCategoryAsync(filter);
             var (status, Warningmessage , resuli) = check;
             if (status == (int)ApplicationEnum.APIStatus.Failed)
                 return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
