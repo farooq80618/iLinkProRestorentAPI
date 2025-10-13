@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice - SS-0335</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 380px;
+      margin: auto;
+      border: 1px solid #ccc;
+      padding: 15px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h2 {
+      text-align: center;
+      margin: 5px 0;
+      color: #e67e22; /* Orange */
+    }
+    h3 {
+      text-align: center;
+      margin: 5px 0;
+      color: #555;
+    }
+    p {
+      text-align: center;
+      margin: 4px 0;
+      font-size: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: #fff;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th {
+      background: #e67e22;
+      color: white;
+      padding: 6px;
+      font-size: 14px;
+    }
+    td {
+      padding: 6px;
+      font-size: 13px;
+      text-align: center;
+    }
+    .summary {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .summary td {
+      padding: 5px;
+    }
+    .total {
+      font-weight: bold;
+      color: #e67e22;
+    }
+    .payment {
+      background: #eee;
+      padding: 10px;
+      text-align: center;
+      margin-top: 15px;
+      font-weight: bold;
+      border: 1px solid #ccc;
+      border-left: 5px solid #e67e22;
+    }
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 15px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <h2>TAX INVOICE</h2>
+  <h3>[CompanyName]</h3>
+  <p>[Address 1]<br>[Address 2]<br>[Address 3]</p>
+  <p>[ContactNo]</p>
+
+  <p><strong>Invoice No:</strong> [InvoiceNo]<br>
+  <strong>Invoice Date:</strong> [InvoiceDate] <br>
+  <strong>Operator Name:</strong> [UserName]</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Rate</th>
+        <th>Qty.</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!--<tr><td>WATER 1.5LTR ROMANA</td><td>1.50</td><td>1</td><td>1.50</td></tr>
+      <tr><td>WATER 500ML AQUAFINA</td><td>1.00</td><td>1</td><td>1.00</td></tr>
+      <tr><td>CARAMEL CUP CAKE</td><td>1.50</td><td>1</td><td>1.50</td></tr>
+      <tr><td>CAVITHA</td><td>1.50</td><td>1</td><td>1.50</td></tr>
+      <tr><td>CAVITHA PLAIN</td><td>1.50</td><td>1</td><td>1.50</td></tr>
+      <tr><td>AMUL BUTTER</td><td>5.00</td><td>1</td><td>5.00</td></tr>
+      <tr><td>CHICKEN FROZEN 100GM PENA BRANCA</td><td>10.00</td><td>1</td><td>10.00</td></tr>
+      <tr><td>CHICKEN LIVER BELLO</td><td>5.00</td><td>1</td><td>5.00</td></tr>
+      <tr><td>BOUNTY CHOCOLATE</td><td>3.00</td><td>1</td><td>3.00</td></tr>
+      <tr><td>CRUNCH CREAM VANILLA 76GM</td><td>3.00</td><td>1</td><td>3.00</td></tr>
+      <tr><td>CRUNCH N CREAM ORANGE</td><td>3.00</td><td>1</td><td>3.00</td></tr>-->
+        [ReciptDetail]
+    </tbody>
+  </table>
+
+  <p class="summary">Items: <strong>[TotalItems]</strong> &nbsp;&nbsp; Qty: <strong>[TotalQty]</strong></p>
+
+  <div class="payment">
+    Payment Info <br>
+    <!--Cash: $37.82-->[PaymentInfo]
+  </div>
+
+  <table class="summary" width="100%">
+    <tr><td>Sub Total:</td><td align="right">$36.00</td></tr>
+    <tr><td>Tax:</td><td align="right">$1.82</td></tr>
+    <tr class="total"><td>Total:</td><td align="right">$37.82</td></tr>
+  </table>
+
+  <p class="footer">*[InvoiceNo]*</p>
+  <p class="footer">[QR Code Here]</p>
+</body>
+</html>

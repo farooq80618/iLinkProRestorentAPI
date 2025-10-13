@@ -1,0 +1,111 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Interfaces\Report\**" />
+    <Content Remove="Interfaces\Report\**" />
+    <EmbeddedResource Remove="Interfaces\Report\**" />
+    <None Remove="Interfaces\Report\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Controllers\CategoryController.cs" />
+    <Compile Remove="Controllers\CompanyController.cs" />
+    <Compile Remove="Controllers\DashBoardLocationController.cs" />
+    <Compile Remove="Controllers\DashBoardMultiLocationController.cs" />
+    <Compile Remove="Controllers\ExpenseController.cs" />
+    <Compile Remove="Controllers\ProductController.cs" />
+    <Compile Remove="Controllers\PromotionController.cs" />
+    <Compile Remove="Controllers\PurchaseEntryController.cs" />
+    <Compile Remove="Controllers\SaleReciptReportController.cs" />
+    <Compile Remove="Controllers\ScriptExecutorController.cs" />
+    <Compile Remove="Controllers\ShiftController.cs" />
+    <Compile Remove="Controllers\SyncActivityController.cs" />
+    <Compile Remove="Controllers\SyncCategoryController.cs" />
+    <Compile Remove="Controllers\SyncProductController.cs" />
+    <Compile Remove="Controllers\SyncSaleInvoiceController.cs" />
+    <Compile Remove="Controllers\SyncSystemSetupController.cs" />
+    <Compile Remove="Controllers\SyncVoucherController.cs" />
+    <Compile Remove="Controllers\UserRegistrationController.cs" />
+    <Compile Remove="Controllers\UserRightController.cs" />
+    <Compile Remove="Controllers\WeatherForecastController.cs" />
+    <Compile Remove="Interfaces\DBRepository\ICategoryRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ICompanyRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IProductRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IPromotionRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IPurchaseEntryRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IStockTransferRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncActivityRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncAPIsRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncCategoryRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncProductRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncSalesInvoiceRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\ISyncVoucherRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IUserRegistrationRepository.cs" />
+    <Compile Remove="Interfaces\DBRepository\IUserRightsRepository.cs" />
+    <Compile Remove="Model\Category.cs" />
+    <Compile Remove="Model\Company.cs" />
+    <Compile Remove="Model\CompanyAPIConfig.cs" />
+    <Compile Remove="Model\Custom\GenericModel.cs" />
+    <Compile Remove="Model\Custom\Promotion.cs" />
+    <Compile Remove="Model\InvoiceInfo.cs" />
+    <Compile Remove="Model\Invoice_Payment.cs" />
+    <Compile Remove="Model\Invoice_PayOut.cs" />
+    <Compile Remove="Model\Invoice_Product.cs" />
+    <Compile Remove="Model\Payment.cs" />
+    <Compile Remove="Model\Product.cs" />
+    <Compile Remove="Model\PurchaseEntry.cs" />
+    <Compile Remove="Model\Purchase_Join.cs" />
+    <Compile Remove="Model\Purhcase.cs" />
+    <Compile Remove="Model\PurhcaseReturn.cs" />
+    <Compile Remove="Model\Salesman_Commission.cs" />
+    <Compile Remove="Model\SalesRetrun.cs" />
+    <Compile Remove="Model\SalesReturn_Join.cs" />
+    <Compile Remove="Model\StockTransfer.cs" />
+    <Compile Remove="Model\SyncActivity.cs" />
+    <Compile Remove="Model\SyncCategoryRequest.cs" />
+    <Compile Remove="Model\SyncProduct.cs" />
+    <Compile Remove="Model\SystemSettings.cs" />
+    <Compile Remove="Model\UserRights.cs" />
+    <Compile Remove="Model\Voucher.cs" />
+    <Compile Remove="Repositories\APIClient.cs" />
+    <Compile Remove="Repositories\CompanyRepository.cs" />
+    <Compile Remove="Repositories\DashboardMultiLocationRepository.cs" />
+    <Compile Remove="Repositories\DashboardSingleLocationRepository.cs" />
+    <Compile Remove="Repositories\ExpenseRepository.cs" />
+    <Compile Remove="Repositories\ProductRepository.cs" />
+    <Compile Remove="Repositories\PromotionRepository.cs" />
+    <Compile Remove="Repositories\PurchaseEntryRepository.cs" />
+    <Compile Remove="Repositories\SalesReportRepository.cs" />
+    <Compile Remove="Repositories\ScriptExecutorRepository.cs" />
+    <Compile Remove="Repositories\ShiftRepository.cs" />
+    <Compile Remove="Repositories\StockTransferRepository.cs" />
+    <Compile Remove="Repositories\SyncActivityRepository.cs" />
+    <Compile Remove="Repositories\SyncAPIs.cs" />
+    <Compile Remove="Repositories\SyncCategoryRepository.cs" />
+    <Compile Remove="Repositories\SyncProductRepository.cs" />
+    <Compile Remove="Repositories\SyncSalesInvoiceRepository.cs" />
+    <Compile Remove="Repositories\SyncSystemSetupRepository.cs" />
+    <Compile Remove="Repositories\SyncVoucherRepository.cs" />
+    <Compile Remove="Repositories\UserRegistrationRepository.cs" />
+    <Compile Remove="Repositories\UserRightRepository.cs" />
+    <Compile Remove="Repositories\UserRightsRepository.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="DinkToPdf" Version="1.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.8" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+</Project>
