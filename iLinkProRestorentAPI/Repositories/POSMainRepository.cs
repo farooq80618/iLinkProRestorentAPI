@@ -104,7 +104,11 @@ namespace iLinkProRestorentAPI.Repositories
                     DishID,
                     RTRIM(FColor) ButtonColor,
                     MIPhoto SaveImageDB , 
-                    DIRate as DineinRate
+                    DIRate as DineinRate ,
+                case 
+                    When (Select COUNT(*) from Modifiers m Where Dish.DishName = m.Item) > 0 then 1
+                    else 0 
+                    end as ModifierFlag
                 FROM 
                     Category
                 JOIN 
@@ -122,7 +126,7 @@ namespace iLinkProRestorentAPI.Repositories
                     Id AS DishID,
                     NULL AS ButtonColor,
                     NULL AS SaveImageDB ,
-                    Rate
+                    Rate , 0 as ModifierFlag
                 FROM 
                     combo
                 WHERE 
@@ -215,6 +219,105 @@ namespace iLinkProRestorentAPI.Repositories
             }
         }
 
+        public async Task<Tuple<int, string, List<Modifiers>>> GetModifireAsync(string Dish)
+        {
+            try
+            {
+                var modifiers = new List<Modifiers>();
 
+                using (var connection = _context.CreateConnection())
+                {
+                    var modifierQuery = $"Select * from Modifiers Where Item = '{Dish}'";
+                    var modifier = (await connection.QueryAsync<Modifiers>(modifierQuery)).ToList();
+
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Success", modifier);
+
+                }
+            }
+            catch (Exception ex)
+            {
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (List<Modifiers>)null);
+            }
+        }
+
+        public async Task<Tuple<int, string, List<PizzaSize>>> GetPizzaAsync()
+        {
+            try
+            {
+                var pizzaSizeQuery = "SELECT SizeID, RTRIM(Size) AS Size FROM PizzaSize";
+
+                var pizzaMasterQuery = @"
+                SELECT 
+                    Pizza_ID, 
+                    RTRIM(PizzaName) AS PizzaName, 
+                    RTRIM(PizzaSize) AS PizzaSize, 
+                    [Description] AS Desription,
+                    Rate,
+                    ToppingsLimit,
+                    Discount 
+                FROM PizzaMaster";
+
+                var pizzaModifierQuery = @"
+                SELECT 
+                    PM_ID, 
+                    PizzaID, 
+                    RTRIM(ModifierName) AS ModifierName, 
+                    Rate 
+                FROM PizzaModifier";
+
+                var pizzaToppingQuery = @"
+                SELECT 
+                    T_ID, 
+                    RTRIM(ToppingName) AS ToppingName, 
+                    RTRIM(ToppingSize) AS ToppingSize,
+                    RTRIM(PizzaSize) AS PizzaSize, 
+                    Rate 
+                FROM PizzaTopping";
+
+                using (var connection = _context.CreateConnection())
+                {
+                    var sizes = (await connection.QueryAsync<PizzaSize>(pizzaSizeQuery)).ToList();
+                    var pizzas = (await connection.QueryAsync<PizzaMaster>(pizzaMasterQuery)).ToList();
+                    var modifiers = (await connection.QueryAsync<PizzaModifier>(pizzaModifierQuery)).ToList();
+                    var toppings = (await connection.QueryAsync<PizzaTopping>(pizzaToppingQuery)).ToList();
+
+                    // 1. Attach modifiers to each pizza
+                    foreach (var pizza in pizzas)
+                    {
+                        pizza.Modifier = modifiers
+                            .Where(m => m.PizzaID == pizza.Pizza_ID)
+                            .ToList();
+                    }
+
+                    // 2. Attach pizzas and toppings to each size
+                    foreach (var size in sizes)
+                    {
+                        size.PizzaMaster = pizzas
+                            .Where(p => p.PizzaSize?.Equals(size.Size, StringComparison.OrdinalIgnoreCase) == true)
+                            .ToList();
+
+                        size.PizzaTopping = toppings
+                            .Where(t => t.PizzaSize?.Equals(size.Size, StringComparison.OrdinalIgnoreCase) == true)
+                            .ToList();
+                    }
+
+                    return Tuple.Create(
+                        (int)ApplicationEnum.APIStatus.Success,
+                        "Success",
+                        sizes
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+#pragma warning disable CS8619
+                return Tuple.Create(
+                    (int)ApplicationEnum.APIStatus.Failed,
+                    ex.Message,
+                    (List<PizzaSize>)null
+                );
+#pragma warning restore CS8619
+            }
+        }
     }
 }

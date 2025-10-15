@@ -47,5 +47,25 @@ namespace iLinkProRestorentAPI.Controllers
                 return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
             return Ok(APIResponse<List<TableMaster>>.SuccessResponse(resuli));
         }
+
+        [HttpGet("GetModifierAsync")]
+        public async Task<IActionResult> GetModifierAsync(string dishName)
+        {
+            var check = await _repo.GetModifireAsync(dishName);
+            var (status, Warningmessage, resuli) = check;
+            if (status == (int)ApplicationEnum.APIStatus.Failed)
+                return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+            return Ok(APIResponse<List<Modifiers>>.SuccessResponse(resuli));
+        }
+
+        [HttpGet("GetPizzaMaster")]
+        public async Task<IActionResult> GetPizzaMaster()
+        {
+            var check = await _repo.GetPizzaAsync();
+            var (status, Warningmessage, resuli) = check;
+            if (status == (int)ApplicationEnum.APIStatus.Failed)
+                return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+            return Ok(APIResponse<List<PizzaSize>>.SuccessResponse(resuli));
+        }
     }
 }
