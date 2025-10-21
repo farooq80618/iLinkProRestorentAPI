@@ -67,5 +67,28 @@ namespace iLinkProRestorentAPI.Controllers
                 return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
             return Ok(APIResponse<List<PizzaSize>>.SuccessResponse(resuli));
         }
+
+        [HttpPost("GenerateOrder")]
+        public async Task<IActionResult> GenerateOrder(OrderMaster order)
+        {
+            if(order == null)
+                return BadRequest(APIResponse<string>.FailResponse("Data is not found."));
+            if (order.orderType == OrderType.DineIn)
+            {
+                var check = await _repo.InsertOrderAsync(order);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
+            }
+            else
+            {
+                var check = await _repo.InsertTakeAwayOrderAsync(order);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
+            }
+        }
     }
 }

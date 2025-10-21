@@ -17,6 +17,9 @@
         public string? ButtonColor { get; set; }
         //public byte[]? SaveImageDB { get; set; }
         public decimal DineinRate { get; set; }
+        public decimal VAT { get; set; }
+        public decimal ST { get; set; }
+        public decimal SC { get; set; }
         public bool ModifierFlag { get; set; }
     }
 
@@ -51,6 +54,9 @@
         public decimal Rate { get; set; }
         public int ToppingsLimit { get; set; }
         public decimal Discount { get; set; }
+        public decimal VAT { get; set; }
+        public decimal ST { get; set; }
+        public decimal SC { get; set; }
         public List<PizzaModifier>? Modifier { get; set; }
     }
 
