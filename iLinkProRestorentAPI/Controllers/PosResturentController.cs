@@ -19,7 +19,7 @@ namespace iLinkProRestorentAPI.Controllers
             _repo = repo;
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("GetCategoryAsync")]
         public async Task<IActionResult> GetCategoryAsync(string? filter)
         {
@@ -30,7 +30,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<CategoryDTO>>.SuccessResponse(resuli));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("GetProductAsync")]
         public async Task<IActionResult> GetProductAsync(string CategoryName)
         {
@@ -41,7 +41,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<ProductDTO>>.SuccessResponse(resuli));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("GetTableDetailsAsync")]
         public async Task<IActionResult> GetTableDetailsAsync()
         {
@@ -52,7 +52,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<TableMaster>>.SuccessResponse(resuli));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("GetModifierAsync")]
         public async Task<IActionResult> GetModifierAsync(string dishName)
         {
@@ -63,7 +63,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<Modifiers>>.SuccessResponse(resuli));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("GetPizzaMasterAsync")]
         public async Task<IActionResult> GetPizzaMaster()
         {
@@ -74,7 +74,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<PizzaSize>>.SuccessResponse(resuli));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpPost("GenerateOrderAsync")]
         public async Task<IActionResult> GenerateOrder(OrderMaster order)
         {
@@ -98,7 +98,7 @@ namespace iLinkProRestorentAPI.Controllers
             }
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpGet("ViewOrderDetailAsync")]
         public async Task<IActionResult> ViewOrderDetailAsync(string ticketBNo)
         {

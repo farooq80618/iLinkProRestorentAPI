@@ -20,7 +20,7 @@ namespace iLinkProRestorentAPI.Controllers
             _repo = repo;
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpPost("ChangePin")]
         public async Task<IActionResult> ChangePin(ChangePinCode changePinCode)
         {
@@ -43,7 +43,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
         }
 
-        [Authorize]
+        //[Authorize]
         [HttpPost("LogOut")]
         public async Task<IActionResult> Logout()
         {
