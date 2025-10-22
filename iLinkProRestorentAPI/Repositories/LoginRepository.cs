@@ -168,15 +168,17 @@ namespace iLinkProRestorentAPI.Repositories
             }
         }
 
-        public async Task<Tuple<int, string>> ConfirmRegistration(string userId , string OTPCode , string newPassword , string ConfirmPassword)
+        public async Task<Tuple<int, string>> ConfirmRegistration(string userId, string newPassword)
         {
-            try 
+            try
             {
+                var newPIN = CryptoHelper.Encrypt(newPassword);
+
                 var registrationQuery = @"
-                 SELECT UserID , OTPCode
-                    FROM Registration 
-                    WHERE (rtrim(UserId) = @UserId or EmailID = @UserId ) 
-                    and UserType = 'Admin'";
+                    SELECT UserID
+                    FROM Registration
+                    WHERE (RTRIM(UserId) = @UserId OR EmailID = @UserId)
+                      AND UserType in ('Admin' , 'Super Admin' , 'APP User') ";
 
                 using (var connection = _context.CreateConnection())
                 {
@@ -184,43 +186,46 @@ namespace iLinkProRestorentAPI.Repositories
                     var registrationResult = await connection.QueryFirstOrDefaultAsync<dynamic>(registrationQuery, registrationParameters);
 
                     if (registrationResult == null)
-                    {
-                        return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Failed, "Invalid credentials");
-                    }
+                        return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Invalid credentials.");
 
-                    string UserID = registrationResult.UserID;  
+                    string userID = registrationResult.UserID;
                     string sysOTPCode = registrationResult.OTPCode;
 
-                    if (sysOTPCode != OTPCode)
-                        return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Failed, "Invalid OTP.");
-                    
-                    if(newPassword != ConfirmPassword)
-                        return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Failed, "Password and confirm password mismatch.");
+                     
+                    // ✅ Check if this new password is already used by any user
+                    var checkPasswordQuery = @"
+                        SELECT COUNT(1)
+                        FROM Registration
+                        WHERE Password = @Password";
 
-                    var query = @"
-                        UPDATE Registration 
-                        SET 
-                            PortalPassword = @PortalPassword ,
-                            PortalLastLogin = getDate() ,
-                            IsLoginPortal = 1 
-                        WHERE 
-                           rtrim(UserId) = @UserId";
+                    int existingCount = await connection.ExecuteScalarAsync<int>(checkPasswordQuery, new { Password = newPIN });
 
-                    var parameters = new
+                    if (existingCount > 0)
+                        return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "This password is already used by another user. Please choose a different one.");
+
+                    // ✅ Update the password if it's unique
+                    var updateQuery = @"
+                        UPDATE Registration
+                        SET Password = @Password
+                        WHERE RTRIM(UserId) = @UserId";
+
+                    var updateParameters = new
                     {
-                        PortalPassword = newPassword,
-                        UserId = UserID,
+                        Password = newPIN,
+                        UserId = userID
                     };
-                    var rowsAffected = await connection.ExecuteAsync(query, parameters);
-                    if (rowsAffected == 0)
-                        return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Failed, "Something went wrong.");
-                }
 
-                return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Success, "Password changed successfully.");
+                    int rowsAffected = await connection.ExecuteAsync(updateQuery, updateParameters);
+
+                    if (rowsAffected == 0)
+                        return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Something went wrong during update.");
+
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Password changed successfully.");
+                }
             }
-            catch(Exception ex)  
+            catch (Exception ex)
             {
-                return Tuple.Create<int, string>((int)ApplicationEnum.APIStatus.Failed, "Invalid credentials");
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "An error occurred: " + ex.Message);
             }
         }
 

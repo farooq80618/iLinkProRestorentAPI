@@ -7,6 +7,6 @@ namespace iLinkProRestorentAPI.Interfaces.DBRepository
     {
         Task<Tuple<int, string , LoginCredentials>> SignIn(string PIN);
         Task<Tuple<int, string, string>> NewRegistration(string userId);
-        Task<Tuple<int, string>> ConfirmRegistration(string userId, string OTPCode, string newPassword, string ConfirmPassword);
+        Task<Tuple<int, string>> ConfirmRegistration(string userId, string newPassword);
     }
 }

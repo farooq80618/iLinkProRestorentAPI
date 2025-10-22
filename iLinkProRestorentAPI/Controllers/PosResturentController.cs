@@ -4,6 +4,7 @@ using iLinkProRestorentAPI.Enums;
 using iLinkProRestorentAPI.Interfaces;
 using iLinkProRestorentAPI.Model;
 using iLinkProRestorentAPI.Model.Custom.Login;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace iLinkProRestorentAPI.Controllers
@@ -17,7 +18,8 @@ namespace iLinkProRestorentAPI.Controllers
         {
             _repo = repo;
         }
-  
+
+        [Authorize]
         [HttpGet("GetCategoryAsync")]
         public async Task<IActionResult> GetCategoryAsync(string? filter)
         {
@@ -28,6 +30,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<CategoryDTO>>.SuccessResponse(resuli));
         }
 
+        [Authorize]
         [HttpGet("GetProductAsync")]
         public async Task<IActionResult> GetProductAsync(string CategoryName)
         {
@@ -38,6 +41,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<ProductDTO>>.SuccessResponse(resuli));
         }
 
+        [Authorize]
         [HttpGet("GetTableDetailsAsync")]
         public async Task<IActionResult> GetTableDetailsAsync()
         {
@@ -48,6 +52,7 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<TableMaster>>.SuccessResponse(resuli));
         }
 
+        [Authorize]
         [HttpGet("GetModifierAsync")]
         public async Task<IActionResult> GetModifierAsync(string dishName)
         {
@@ -58,7 +63,8 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<Modifiers>>.SuccessResponse(resuli));
         }
 
-        [HttpGet("GetPizzaMaster")]
+        [Authorize]
+        [HttpGet("GetPizzaMasterAsync")]
         public async Task<IActionResult> GetPizzaMaster()
         {
             var check = await _repo.GetPizzaAsync();
@@ -68,7 +74,8 @@ namespace iLinkProRestorentAPI.Controllers
             return Ok(APIResponse<List<PizzaSize>>.SuccessResponse(resuli));
         }
 
-        [HttpPost("GenerateOrder")]
+        [Authorize]
+        [HttpPost("GenerateOrderAsync")]
         public async Task<IActionResult> GenerateOrder(OrderMaster order)
         {
             if(order == null)
@@ -79,7 +86,7 @@ namespace iLinkProRestorentAPI.Controllers
                 var (status, Warningmessage, resuli) = check;
                 if (status == (int)ApplicationEnum.APIStatus.Failed)
                     return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
-                return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
+                return Ok(APIResponse<OrderResponse>.SuccessResponse(resuli , Warningmessage));
             }
             else
             {
@@ -87,8 +94,19 @@ namespace iLinkProRestorentAPI.Controllers
                 var (status, Warningmessage, resuli) = check;
                 if (status == (int)ApplicationEnum.APIStatus.Failed)
                     return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
-                return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
+                return Ok(APIResponse<OrderResponse>.SuccessResponse(resuli, Warningmessage));
             }
+        }
+
+        [Authorize]
+        [HttpGet("ViewOrderDetailAsync")]
+        public async Task<IActionResult> ViewOrderDetailAsync(string ticketBNo)
+        {
+            var check = await _repo.ViewOrderAsync(ticketBNo);
+            var (status, Warningmessage, resuli) = check;
+            if (status == (int)ApplicationEnum.APIStatus.Failed)
+                return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+            return Ok(APIResponse<ViewOrder>.SuccessResponse(resuli));
         }
     }
 }

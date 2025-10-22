@@ -330,204 +330,232 @@ namespace iLinkProRestorentAPI.Repositories
             }
         }
 
-        public async Task<Tuple<int, string, bool>> InsertOrderAsync(OrderMaster order)
-        {
-            using var connection = _context.CreateConnection();
-            if(connection.State == System.Data.ConnectionState.Closed) 
-                connection.Open();  
-
-            using var transaction = connection.BeginTransaction();
-
-            try
-            {
-                // --- 1️⃣ Basic Validations ---
-                if (string.IsNullOrWhiteSpace(order.Table))
-                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Table not selected", false);
-
-                if (order.orderDetails == null || !order.orderDetails.Any())
-                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "No items added", false);
-
-                // --- 2️⃣ Validate stock availability (Temp_Stock_Store) ---
-                foreach (var group in order.orderDetails.GroupBy(o => o.Dish))
-                {
-                    string sqlQty = "SELECT Qty FROM Temp_Stock_Store WHERE Dish = @Dish";
-                    decimal availableQty = await connection.ExecuteScalarAsync<decimal?>(sqlQty, new { Dish = group.Key }, transaction) ?? 0;
-                    decimal requestedQty = group.Sum(x => x.Quantity);
-
-                    if (requestedQty > availableQty)
-                    {
-                        transaction.Rollback();
-                        return Tuple.Create((int)ApplicationEnum.APIStatus.Failed,
-                            $"Added qty ({requestedQty}) more than available ({availableQty}) for '{group.Key}'", false);
-                    }
-                }
-
-                // --- 3️⃣ Deduct stock for each dish in Temp_Stock_Store ---
-                foreach (var item in order.orderDetails)
-                {
-                    string updateStock = @"UPDATE Temp_Stock_Store SET Qty = Qty - @Qty WHERE Dish = @Dish";
-                    await connection.ExecuteAsync(updateStock, new { Dish = item.Dish, Qty = item.Quantity }, transaction);
-                }
-
-                // --- Get next available ID ---
-                string getMaxIdQuery = "SELECT ISNULL(MAX(ID), 0) + 1 FROM RestaurantPOS_OrderInfoKOT";
-                int nextId = await connection.ExecuteScalarAsync<int>(getMaxIdQuery, transaction: transaction);
-
-                // --- Get next TicketNo ---
-                string getMaxTicketQuery = "SELECT ISNULL(MAX(CAST(SUBSTRING(TicketNo, 5, LEN(TicketNo) - 4) AS INT)), 0) + 1 FROM RestaurantPOS_OrderInfoKOT WHERE TicketNo LIKE 'KOT-%'";
-                int nextTicketNo = await connection.ExecuteScalarAsync<int>(getMaxTicketQuery, transaction: transaction);
-
-                string newTicketNo = $"KOT-{nextTicketNo}";
-
-                // --- Insert Order Info ---
-                string insertOrderInfo = @"
-                 INSERT INTO RestaurantPOS_OrderInfoKOT 
-                 (ID, TicketNo, BillDate, GrandTotal, TableNo, Operator, GroupName, TicketNote, KOT_Status, TaxType, NoOfPerson)
-                 VALUES (@ID, @TicketNo, @BillDate, @GrandTotal, @TableNo, @Operator, @GroupName, @Notes, 'Open', @TaxType, @NoOfPerson);
-                 SELECT CAST(SCOPE_IDENTITY() as int);
-                ";
-
-                int ticketId = await connection.ExecuteScalarAsync<int>(
-                    insertOrderInfo,
-                    new
-                    {
-                        ID = nextId,
-                        TicketNo = newTicketNo,
-                        BillDate = DateTime.Now,
-                        GrandTotal = order.TotalAmount,
-                        TableNo = order.Table,
-                        Operator = order.Operator,
-                        GroupName = order.orderType.ToString(),
-                        Notes = order.Notes,
-                        TaxType = "Exclusive",
-                        NoOfPerson = order.NoOfPerson ?? 0
-                    },
-                    transaction
-                );
-
-                ticketId = nextId;
-                // --- 5️⃣ Insert Ordered Items ---
-                string insertOrderedItems = @"
-                 INSERT INTO RestaurantPOS_OrderedProductKOT
-                 (TicketID, Dish, Rate, Quantity, Amount, DiscountPer, DiscountAmount, STPer, STAmount, VATPer, VATAmount, SCPer, SCAmount, TotalAmount, Notes, Category, T_Number, ItemStatus , isComboDeal)
-                 VALUES
-                 (@TicketID, @Dish, @Rate, @Quantity, @Amount, @DiscountPer, @DiscountAmount, @STPer, @STAmount, @VATPer, @VATAmount, @SCPer, @SCAmount, @TotalAmount, @Notes, @Category, @TableNo, @ItemStatus , @isComboDeal);
-                ";
-
-                foreach (var item in order.orderDetails)
-                {
-                    await connection.ExecuteAsync(insertOrderedItems, new
-                    {
-                        TicketID = ticketId,
-                        Dish = item.Dish,
-                        Rate = item.Rate,
-                        Quantity = item.Quantity,
-                        Amount = item.Amount,
-                        DiscountPer = item.DiscountPer,
-                        DiscountAmount = item.DiscountAmount,
-                        STPer = item.STPer,
-                        STAmount = item.STAmount,
-                        VATPer = item.VATPer,
-                        VATAmount = item.VATAmount,
-                        SCPer = item.SCPer,
-                        SCAmount = item.SCAmount,
-                        TotalAmount = item.Amount,
-                        Notes = item.Notes,
-                        Category = item.Category,
-                        TableNo = order.Table,
-                        ItemStatus = "New",
-                        isComboDeal =  item?.isComboDeal ?? false,
-                    }, transaction);
-                }
-
-                string updateTableColor = "UPDATE R_Table SET BkColor = @Color WHERE TableNo = @TableNo";
-                await connection.ExecuteAsync(updateTableColor, new { Color = Color.Red.ToArgb(), TableNo = order.Table }, transaction);
-
-                transaction.Commit();
-                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Order inserted successfully", true);
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, false);
-            }
-        }
-
-        public async Task<Tuple<int, string, bool>> InsertTakeAwayOrderAsync(OrderMaster order)
+        public async Task<Tuple<int, string, OrderResponse>> InsertOrderAsync(OrderMaster order)
         {
             using var connection = _context.CreateConnection();
             if (connection.State == ConnectionState.Closed)
                 connection.Open();
 
             using var transaction = connection.BeginTransaction();
+
             try
             {
-                if (order.orderDetails == null || !order.orderDetails.Any())
-                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "No items added", false);
+                // 1️⃣ Basic validation
+                if (string.IsNullOrWhiteSpace(order.Table))
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Table not selected", (OrderResponse)null);
 
+                if (order.orderDetails == null || !order.orderDetails.Any())
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "No items added", (OrderResponse)null);
+
+                // 2️⃣ Validate stock availability
                 foreach (var group in order.orderDetails.GroupBy(o => o.Dish))
                 {
                     string sqlQty = "SELECT Qty FROM Temp_Stock_Store WHERE Dish = @Dish";
-                    decimal availableQty = await connection.ExecuteScalarAsync<decimal?>(sqlQty, new { Dish = group.Key }, transaction) ?? 0;
+                    decimal availableQty = await connection.ExecuteScalarAsync<decimal?>(
+                        sqlQty,
+                        new { Dish = group.Key },
+                        transaction: transaction
+                    ) ?? 0;
+
                     decimal requestedQty = group.Sum(x => x.Quantity);
 
                     if (requestedQty > availableQty)
                     {
                         transaction.Rollback();
-                        return Tuple.Create((int)ApplicationEnum.APIStatus.Failed,
-                            $"Added qty ({requestedQty}) exceeds available ({availableQty}) for '{group.Key}'", false);
+                        return Tuple.Create(
+                            (int)ApplicationEnum.APIStatus.Failed,
+                            $"Added qty ({requestedQty}) more than available ({availableQty}) for '{group.Key}'",
+                            (OrderResponse)null
+                        );
                     }
                 }
 
+                // 3️⃣ Deduct stock
+                string updateStock = "UPDATE Temp_Stock_Store SET Qty = Qty - @Qty WHERE Dish = @Dish";
                 foreach (var item in order.orderDetails)
                 {
-                    string updateStock = "UPDATE Temp_Stock_Store SET Qty = Qty - @Qty WHERE Dish = @Dish";
                     await connection.ExecuteAsync(updateStock, new { Dish = item.Dish, Qty = item.Quantity }, transaction);
                 }
 
-                string getMaxIdQuery = "SELECT ISNULL(MAX(ID), 0) + 1 FROM RestaurantPOS_BillingInfoTA";
-                int nextBillId = await connection.ExecuteScalarAsync<int>(getMaxIdQuery, transaction: transaction);
+                // 4️⃣ Generate new ticket info
+                int nextId = await connection.ExecuteScalarAsync<int>(
+                    "SELECT ISNULL(MAX(ID), 0) + 1 FROM RestaurantPOS_OrderInfoKOT",
+                    transaction: transaction
+                );
 
-                string newBillNo = $"TA-{nextBillId.ToString("0000")}";
+                int nextTicketNo = await connection.ExecuteScalarAsync<int>(
+                    "SELECT ISNULL(MAX(CAST(SUBSTRING(TicketNo, 5, LEN(TicketNo) - 4) AS INT)), 0) + 1 FROM RestaurantPOS_OrderInfoKOT WHERE TicketNo LIKE 'KOT-%'",
+                    transaction: transaction
+                );
 
-                string getMaxODNoQuery = "SELECT ISNULL(MAX(ODNo), 0) + 1 FROM tblOrder";
-                int nextODNo = await connection.ExecuteScalarAsync<int>(getMaxODNoQuery, transaction: transaction);
+                string newTicketNo = $"KOT-{nextTicketNo:0000}";
+                // 5️⃣ Insert main order
+                string insertOrderInfo = @"
+                    INSERT INTO RestaurantPOS_OrderInfoKOT 
+                    (ID, TicketNo, BillDate, GrandTotal, TableNo, Operator, GroupName, TicketNote, KOT_Status, TaxType, NoOfPerson)
+                    VALUES (@ID, @TicketNo, @BillDate, @GrandTotal, @TableNo, @Operator, @GroupName, @Notes, 'Open', @TaxType, @NoOfPerson);
+                ";
 
-                string insertOrder = "INSERT INTO tblOrder (ODNo, BillNo) VALUES (@ODNo, @BillNo)";
-                await connection.ExecuteAsync(insertOrder, new { ODNo = nextODNo , BillNo = newBillNo }, transaction);
+                await connection.ExecuteAsync(insertOrderInfo, new
+                {
+                    ID = nextId,
+                    TicketNo = newTicketNo,
+                    BillDate = DateTime.Now,
+                    GrandTotal = order.TotalAmount,
+                    TableNo = order.Table,
+                    Operator = order.Operator,
+                    GroupName = order.orderType.ToString(),
+                    Notes = order.Notes,
+                    TaxType = "Exclusive",
+                    NoOfPerson = order.NoOfPerson ?? 0
+                }, transaction);
 
-                string getNextRmIdQuery = "SELECT ISNULL(MAX(RM_ID), 0) + 1 FROM RM_Used";
-                int nextRmId = await connection.ExecuteScalarAsync<int>(
-                                    getNextRmIdQuery,
-                                    param: null,
-                                    transaction: transaction
-                                );
-
-                string insertRM = "INSERT INTO RM_Used (RM_ID, BillDate, BillNo) VALUES (@RM_ID, @BillDate, @BillNo)";
-                await connection.ExecuteAsync(insertRM, new { RM_ID = nextRmId, BillDate = DateTime.Now, BillNo = newBillNo }, transaction);
+                // 6️⃣ Insert items
+                string insertOrderedItems = @"
+                    INSERT INTO RestaurantPOS_OrderedProductKOT
+                    (TicketID, Dish, Rate, Quantity, Amount, DiscountPer, DiscountAmount, STPer, STAmount, VATPer, VATAmount, SCPer, SCAmount, TotalAmount, Notes, Category, T_Number, ItemStatus, isComboDeal)
+                    VALUES
+                    (@TicketID, @Dish, @Rate, @Quantity, @Amount, @DiscountPer, @DiscountAmount, @STPer, @STAmount, @VATPer, @VATAmount, @SCPer, @SCAmount, @TotalAmount, @Notes, @Category, @TableNo, @ItemStatus, @isComboDeal);
+                ";
 
                 foreach (var item in order.orderDetails)
                 {
-                    string recipeQuery = @"
-                        SELECT RJ.ProductID, RJ.Quantity
-                        FROM Recipe R
-                        INNER JOIN Recipe_Join RJ ON R.R_ID = RJ.RecipeID
-                        WHERE R.Dish = @Dish";
+                    await connection.ExecuteAsync(insertOrderedItems, new
+                    {
+                        TicketID = nextId,
+                        item.Dish,
+                        item.Rate,
+                        item.Quantity,
+                        item.Amount,
+                        item.DiscountPer,
+                        item.DiscountAmount,
+                        item.STPer,
+                        item.STAmount,
+                        item.VATPer,
+                        item.VATAmount,
+                        item.SCPer,
+                        item.SCAmount,
+                        TotalAmount = item.Amount,
+                        item.Notes,
+                        item.Category,
+                        TableNo = order.Table,
+                        ItemStatus = "New",
+                        isComboDeal = item?.isComboDeal ?? false
+                    }, transaction);
+                }
+
+                // 7️⃣ Update table status
+                string updateTableColor = "UPDATE R_Table SET BkColor = @Color WHERE TableNo = @TableNo";
+                await connection.ExecuteAsync(updateTableColor, new { Color = Color.Red.ToArgb(), TableNo = order.Table }, transaction);
+
+                // 8️⃣ Commit transaction
+                transaction.Commit();
+
+                // 9️⃣ Build response
+                var response = new OrderResponse
+                {
+                    OrderID = newTicketNo,
+                    TableNo = order.Table,
+                    TotalAmount = order.TotalAmount,
+                    OrderTime = DateTime.Now
+                };
+
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Order inserted successfully", response);
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (OrderResponse)null);
+            }
+        }
+
+        public async Task<Tuple<int, string, OrderResponse>> InsertTakeAwayOrderAsync(OrderMaster order)
+        {
+            using var connection = _context.CreateConnection();
+            if (connection.State == ConnectionState.Closed)
+                connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // 1️⃣ Basic validation
+                if (order.orderDetails == null || !order.orderDetails.Any())
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "No items added", (OrderResponse)null);
+
+                // 2️⃣ Validate stock availability
+                foreach (var group in order.orderDetails.GroupBy(o => o.Dish))
+                {
+                    const string sqlQty = "SELECT Qty FROM Temp_Stock_Store WHERE Dish = @Dish";
+                    decimal availableQty = await connection.ExecuteScalarAsync<decimal?>(
+                        sqlQty,
+                        new { Dish = group.Key },
+                        transaction: transaction
+                    ) ?? 0;
+
+                    decimal requestedQty = group.Sum(x => x.Quantity);
+
+                    if (requestedQty > availableQty)
+                    {
+                        transaction.Rollback();
+                        return Tuple.Create(
+                            (int)ApplicationEnum.APIStatus.Failed,
+                            $"Added qty ({requestedQty}) exceeds available ({availableQty}) for '{group.Key}'",
+                            (OrderResponse)null
+                        );
+                    }
+                }
+
+                // 3️⃣ Deduct stock
+                const string updateStock = "UPDATE Temp_Stock_Store SET Qty = Qty - @Qty WHERE Dish = @Dish";
+                foreach (var item in order.orderDetails)
+                {
+                    await connection.ExecuteAsync(updateStock, new { Dish = item.Dish, Qty = item.Quantity }, transaction);
+                }
+
+                // 4️⃣ Generate IDs and bill numbers
+                const string getMaxIdQuery = "SELECT ISNULL(MAX(ID), 0) + 1 FROM RestaurantPOS_BillingInfoTA";
+                int nextBillId = await connection.ExecuteScalarAsync<int>(getMaxIdQuery, transaction: transaction);
+
+                string newBillNo = $"TA-{nextBillId:0000}";
+
+                const string getMaxODNoQuery = "SELECT ISNULL(MAX(ODNo), 0) + 1 FROM tblOrder";
+                int nextODNo = await connection.ExecuteScalarAsync<int>(getMaxODNoQuery, transaction: transaction);
+
+                const string insertOrder = "INSERT INTO tblOrder (ODNo, BillNo) VALUES (@ODNo, @BillNo)";
+                await connection.ExecuteAsync(insertOrder, new { ODNo = nextODNo, BillNo = newBillNo }, transaction);
+
+                const string getNextRmIdQuery = "SELECT ISNULL(MAX(RM_ID), 0) + 1 FROM RM_Used";
+                int nextRmId = await connection.ExecuteScalarAsync<int>(getNextRmIdQuery, transaction: transaction);
+
+                const string insertRM = "INSERT INTO RM_Used (RM_ID, BillDate, BillNo) VALUES (@RM_ID, @BillDate, @BillNo)";
+                await connection.ExecuteAsync(insertRM, new { RM_ID = nextRmId, BillDate = DateTime.Now, BillNo = newBillNo }, transaction);
+
+                // 5️⃣ Update Raw Material Usage
+                const string recipeQuery = @"
+                    SELECT RJ.ProductID, RJ.Quantity
+                    FROM Recipe R
+                    INNER JOIN Recipe_Join RJ ON R.R_ID = RJ.RecipeID
+                    WHERE R.Dish = @Dish";
+
+                foreach (var item in order.orderDetails)
+                {
                     var recipeItems = await connection.QueryAsync(recipeQuery, new { Dish = item.Dish }, transaction);
 
                     foreach (var rm in recipeItems)
                     {
                         decimal usedQty = (decimal)rm.Quantity * item.Quantity;
 
-                        string updateRMStock = "UPDATE Temp_Stock_RM SET Qty = Qty - @Qty WHERE ProductID = @ProductID";
+                        const string updateRMStock = "UPDATE Temp_Stock_RM SET Qty = Qty - @Qty WHERE ProductID = @ProductID";
                         await connection.ExecuteAsync(updateRMStock, new { Qty = usedQty, ProductID = rm.ProductID }, transaction);
 
-                        string insertRMJoin = "INSERT INTO RM_Used_Join (RawMaterialID, ProductID, Quantity) VALUES (@RawMaterialID, @ProductID, @Quantity)";
+                        const string insertRMJoin = "INSERT INTO RM_Used_Join (RawMaterialID, ProductID, Quantity) VALUES (@RawMaterialID, @ProductID, @Quantity)";
                         await connection.ExecuteAsync(insertRMJoin, new { RawMaterialID = nextRmId, ProductID = rm.ProductID, Quantity = usedQty }, transaction);
                     }
                 }
 
-                string insertBilling = @"
+                // 6️⃣ Insert Billing Info
+                const string insertBilling = @"
                     INSERT INTO RestaurantPOS_BillingInfoTA
                     (ID, BillNo, BillDate, GrandTotal, Cash, Change, Operator, SubTotal, ParcelCharges,
                      PaymentMode, BillNote, ExchangeRate, CurrencyCode, TADiscountPer, TADiscountAmt,
@@ -538,6 +566,7 @@ namespace iLinkProRestorentAPI.Repositories
                      @PaymentMode, @BillNote, @ExchangeRate, @CurrencyCode, @TADiscountPer, @TADiscountAmt,
                      @Member_ID, @PhoneNo, @ODN, 'Unpaid', @GiftCardID, @GiftCardAmount, @LP, @LA,
                      @CustomerName, @TaxType, @Tip, 0)";
+
                 await connection.ExecuteAsync(insertBilling, new
                 {
                     ID = nextBillId,
@@ -567,8 +596,8 @@ namespace iLinkProRestorentAPI.Repositories
                     Tip = 0
                 }, transaction);
 
-                // 9️⃣ Insert Order Details (RestaurantPOS_OrderedProductBillTA)
-                string insertItems = @"
+                // 7️⃣ Insert Ordered Items
+                const string insertItems = @"
                     INSERT INTO RestaurantPOS_OrderedProductBillTA
                     (BillID, Dish, Rate, Quantity, Amount, DiscountPer, DiscountAmount,
                      STPer, STAmount, VATPer, VATAmount, SCPer, SCAmount, TotalAmount,
@@ -577,6 +606,7 @@ namespace iLinkProRestorentAPI.Repositories
                     (@BillID, @Dish, @Rate, @Quantity, @Amount, @DiscountPer, @DiscountAmount,
                      @STPer, @STAmount, @VATPer, @VATAmount, @SCPer, @SCAmount, @TotalAmount,
                      @Notes, @Category, @ItemStatus)";
+
                 foreach (var item in order.orderDetails)
                 {
                     await connection.ExecuteAsync(insertItems, new
@@ -601,13 +631,94 @@ namespace iLinkProRestorentAPI.Repositories
                     }, transaction);
                 }
 
+                // 8️⃣ Commit
                 transaction.Commit();
-                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, $"Takeaway order saved. BillNo: {newBillNo}", true);
+
+                // 9️⃣ Build structured response
+                var response = new OrderResponse
+                {
+                    OrderID = newBillNo,
+                    TableNo = "Takeaway",
+                    TotalAmount = order.TotalAmount,
+                    OrderTime = DateTime.Now
+                };
+
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, $"Takeaway order saved successfully.", response);
             }
             catch (Exception ex)
             {
                 transaction.Rollback();
-                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, false);
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (OrderResponse)null);
+            }
+        }
+
+        public async Task<Tuple<int, string, ViewOrder>> ViewOrderAsync(string ticketNo)
+        {
+            using var connection = _context.CreateConnection();
+            if (connection.State == ConnectionState.Closed)
+                connection.Open();
+
+            try
+            {
+                string headerQuery = @"
+                    SELECT DISTINCT 
+                        RTRIM(TicketNo) AS TicketNo,
+                        RTRIM(TableNo) AS TableNo,
+                        RTRIM(KOT_Status) AS OrderStatus,
+                        GrandTotal AS TotalAmount,
+                        BillDate AS OrderDate
+                    FROM RestaurantPOS_OrderInfoKOT
+                    WHERE KOT_Status = 'Open' AND TicketNo = @TicketNo
+
+                    UNION
+
+                    SELECT DISTINCT 
+                        RTRIM(BillNo) AS TicketNo,
+                        'TakeAway' AS TableNo,
+                        RTRIM(TA_Status) AS OrderStatus,
+                        GrandTotal AS TotalAmount,
+                        BillDate AS OrderDate
+                    FROM RestaurantPOS_BillingInfoTA
+                    WHERE TA_Status IN ('Unpaid', 'Paid Directly') AND BillNo = @TicketNo
+                    ORDER BY 1;";
+
+                var order = await connection.QueryFirstOrDefaultAsync<ViewOrder>(headerQuery, new { TicketNo = ticketNo });
+
+                if (order == null)
+                {
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, $"No order found for TicketNo '{ticketNo}'", (ViewOrder)null);
+                }
+
+                string detailQuery = @"
+                    SELECT DISTINCT 
+                        RTRIM(RestaurantPOS_OrderedProductKOT.Dish) AS Dish,
+                        Quantity,
+                        RTRIM(RestaurantPOS_OrderedProductKOT.Notes) AS Notes,
+                        RTRIM(RestaurantPOS_OrderedProductKOT.Category) AS Category
+                    FROM RestaurantPOS_OrderedProductKOT
+                    INNER JOIN RestaurantPOS_OrderInfoKOT ON RestaurantPOS_OrderInfoKOT.ID = RestaurantPOS_OrderedProductKOT.TicketID
+                    WHERE TicketNo = @TicketNo AND KOT_Status = 'Open'
+
+                    UNION
+
+                    SELECT DISTINCT 
+                        RTRIM(RestaurantPOS_OrderedProductBillTA.Dish) AS Dish,
+                        Quantity,
+                        RTRIM(RestaurantPOS_OrderedProductBillTA.Notes) AS Notes,
+                        RTRIM(RestaurantPOS_OrderedProductBillTA.Category) AS Category
+                    FROM RestaurantPOS_OrderedProductBillTA
+                    INNER JOIN RestaurantPOS_BillingInfoTA ON RestaurantPOS_BillingInfoTA.ID = RestaurantPOS_OrderedProductBillTA.BillID
+                    WHERE BillNo = @TicketNo AND TA_Status IN ('Unpaid', 'Paid Directly');";
+
+                var details = (await connection.QueryAsync<OrderDetails>(detailQuery, new { TicketNo = ticketNo })).ToList();
+
+                order.Details = details;
+
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Order retrieved successfully", order);
+            }
+            catch (Exception ex)
+            {
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (ViewOrder)null);
             }
         }
     }

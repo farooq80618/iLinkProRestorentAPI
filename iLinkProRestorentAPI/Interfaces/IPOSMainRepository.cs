@@ -10,7 +10,8 @@ namespace iLinkProRestorentAPI.Interfaces
         Task<Tuple<int, string, List<TableMaster>>> GetTablesAsync();
         Task<Tuple<int, string, List<Modifiers>>> GetModifireAsync(string Dish);
         Task<Tuple<int, string, List<PizzaSize>>> GetPizzaAsync();
-        Task<Tuple<int, string, bool>> InsertOrderAsync(OrderMaster order);
-        Task<Tuple<int, string, bool>> InsertTakeAwayOrderAsync(OrderMaster order);
+        Task<Tuple<int, string, OrderResponse>> InsertOrderAsync(OrderMaster order);
+        Task<Tuple<int, string, OrderResponse>> InsertTakeAwayOrderAsync(OrderMaster order);
+        Task<Tuple<int, string, ViewOrder>> ViewOrderAsync(string ticketNo);
     }
 }

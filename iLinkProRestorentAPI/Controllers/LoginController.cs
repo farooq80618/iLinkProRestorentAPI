@@ -4,6 +4,7 @@ using iLinkProRestorentAPI.Enums;
 using iLinkProRestorentAPI.Interfaces.DBRepository;
 using iLinkProRestorentAPI.Model;
 using iLinkProRestorentAPI.Model.Custom.Login;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
@@ -19,26 +20,34 @@ namespace iLinkProRestorentAPI.Controllers
             _repo = repo;
         }
 
-        [HttpPost("ChangePasswordViaOTP")]
-        public async Task<IActionResult> ChangePasswordViaOTP(ChangePassword changePassword)
+        [Authorize]
+        [HttpPost("ChangePin")]
+        public async Task<IActionResult> ChangePin(ChangePinCode changePinCode)
         {
-            if (changePassword == null)
-                return BadRequest(APIResponse<string>.FailResponse("Please provide credentials."));
+            if (changePinCode == null)
+                return BadRequest(APIResponse<string>.FailResponse("Please provide pins."));
 
-            if (changePassword.UserId == "")
-                return BadRequest(APIResponse<string>.FailResponse("Please provide user id."));
+            if (changePinCode.CurrentPin == "")
+                return BadRequest(APIResponse<string>.FailResponse("Please provide current pin."));
 
-            if (changePassword.OTPCode == "")
-                return BadRequest(APIResponse<string>.FailResponse("Please provide OTP code."));
+            if (changePinCode.ChangePin == "")
+                return BadRequest(APIResponse<string>.FailResponse("Please provide change pin."));
 
-            if (changePassword.Password == "")
-                return BadRequest(APIResponse<string>.FailResponse("Please provide password."));
+            if (changePinCode.ChangePin != changePinCode.ConfirmPin)
+                return BadRequest(APIResponse<string>.FailResponse("Pin mismatched with change pin."));
 
-            var check = await _repo.ConfirmRegistration(changePassword.UserId, changePassword.OTPCode, changePassword.Password, changePassword.ConfirmPassword);
+            var check = await _repo.ConfirmRegistration(changePinCode.userId, changePinCode.ChangePin);
             var (status, Warningmessage) = check;
             if (status == (int)ApplicationEnum.APIStatus.Failed)
                 return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
             return Ok(APIResponse<string>.SuccessResponse(Warningmessage));
+        }
+
+        [Authorize]
+        [HttpPost("LogOut")]
+        public async Task<IActionResult> Logout()
+        {
+            return Ok(APIResponse<string>.SuccessResponse("Current user is logout successfully."));
         }
 
         [HttpPost("SignInUser")]
