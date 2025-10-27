@@ -108,5 +108,49 @@ namespace iLinkProRestorentAPI.Controllers
                 return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
             return Ok(APIResponse<ViewOrder>.SuccessResponse(resuli));
         }
+
+        [HttpGet("ViewCompleteOrderHistoryAsync")]
+        public async Task<IActionResult> ViewCompleteOrderHistoryAsync(int orderType , string ticketNo)
+        {
+            if (orderType == (int)OrderType.DineIn)
+            {
+                var check = await _repo.ViewKOTOrderHistoryAsync(ticketNo);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<ViewOrderHistory>.SuccessResponse(resuli));
+            }
+            else
+            {
+                var check = await _repo.ViewTakeAwayOrderHistoryAsync(ticketNo);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<ViewOrderHistory>.SuccessResponse(resuli));
+            }
+        }
+
+        [HttpPost("EditOrderAsync")]
+        public async Task<IActionResult> EditOrderAsync(OrderMaster order , string orignalOrderId)
+        {
+            if (order == null)
+                return BadRequest(APIResponse<string>.FailResponse("Data is not found."));
+            if (order.orderType == OrderType.DineIn)
+            {
+                var check = await _repo.UpdateOrderAsync(order , orignalOrderId , false);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<OrderResponse>.SuccessResponse(resuli, Warningmessage));
+            }
+            else
+            {
+                var check = await _repo.UpdateOrderAsync(order, orignalOrderId, false);
+                var (status, Warningmessage, resuli) = check;
+                if (status == (int)ApplicationEnum.APIStatus.Failed)
+                    return BadRequest(APIResponse<string>.FailResponse(Warningmessage));
+                return Ok(APIResponse<OrderResponse>.SuccessResponse(resuli, Warningmessage));
+            }
+        }
     }
 }

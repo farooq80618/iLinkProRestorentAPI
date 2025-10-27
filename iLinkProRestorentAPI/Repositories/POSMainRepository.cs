@@ -359,15 +359,16 @@ namespace iLinkProRestorentAPI.Repositories
 
                     decimal requestedQty = group.Sum(x => x.Quantity);
 
-                    if (requestedQty > availableQty)
-                    {
-                        transaction.Rollback();
-                        return Tuple.Create(
-                            (int)ApplicationEnum.APIStatus.Failed,
-                            $"Added qty ({requestedQty}) more than available ({availableQty}) for '{group.Key}'",
-                            (OrderResponse)null
-                        );
-                    }
+//                    if (requestedQty > availableQty)
+//                    {
+//                        transaction.Rollback();
+//#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+//                        return Tuple.Create(
+//                            (int)ApplicationEnum.APIStatus.Failed,
+//                            $"Added qty ({requestedQty}) more than available ({availableQty}) for '{group.Key}'",
+//                            item3: null as OrderResponse);
+//#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
+//                    }
                 }
 
                 // 3️⃣ Deduct stock
@@ -495,15 +496,15 @@ namespace iLinkProRestorentAPI.Repositories
 
                     decimal requestedQty = group.Sum(x => x.Quantity);
 
-                    if (requestedQty > availableQty)
-                    {
-                        transaction.Rollback();
-                        return Tuple.Create(
-                            (int)ApplicationEnum.APIStatus.Failed,
-                            $"Added qty ({requestedQty}) exceeds available ({availableQty}) for '{group.Key}'",
-                            (OrderResponse)null
-                        );
-                    }
+                    //if (requestedQty > availableQty)
+                    //{
+                    //    transaction.Rollback();
+                    //    return Tuple.Create(
+                    //        (int)ApplicationEnum.APIStatus.Failed,
+                    //        $"Added qty ({requestedQty}) exceeds available ({availableQty}) for '{group.Key}'",
+                    //        (OrderResponse)null
+                    //    );
+                    //}
                 }
 
                 // 3️⃣ Deduct stock
@@ -652,6 +653,179 @@ namespace iLinkProRestorentAPI.Repositories
             }
         }
 
+        public async Task<Tuple<int, string, ViewOrderHistory>> ViewTakeAwayOrderHistoryAsync(string ticketNo)
+        {
+            using var connection = _context.CreateConnection();
+            if (connection.State == ConnectionState.Closed)
+                connection.Open();
+
+            try
+            {
+                // 1️⃣ Fetch billing info
+                const string billingQuery = @"
+                    SELECT 
+                        BillNo,
+                        Operator,
+                        GrandTotal AS TotalAmount,
+                        SubTotal,
+                        PaymentMode,
+                        BillNote AS Notes
+                    FROM RestaurantPOS_BillingInfoTA
+                    WHERE ID = @TicketNo";
+
+                var billing = await connection.QueryFirstOrDefaultAsync(billingQuery, new { TicketNo = ticketNo });
+
+                if (billing == null)
+                    return Tuple.Create(
+                        (int)ApplicationEnum.APIStatus.Failed,
+                        "No takeaway order found for the provided Ticket ID.",
+                        (ViewOrderHistory)null
+                    );
+
+                // 2️⃣ Fetch ordered items
+                const string orderItemsQuery = @"
+                    SELECT 
+                        Dish,
+                        Rate,
+                        Quantity,
+                        Amount,
+                        VATPer,
+                        VATAmount,
+                        STPer,
+                        STAmount,
+                        SCPer,
+                        SCAmount,
+                        DiscountPer,
+                        DiscountAmount,
+                        Notes,
+                        Category,
+                        0 AS isComboDeal
+                    FROM RestaurantPOS_OrderedProductBillTA
+                    WHERE BillID = @TicketNo";
+
+                var orderDetails = (await connection.QueryAsync<OrderDetailHistory>(orderItemsQuery, new { TicketNo = ticketNo })).ToList();
+
+                // 3️⃣ Map to ViewOrderHistory object
+                var result = new ViewOrderHistory
+                {
+                    Table = "Takeaway",
+                    orderType = OrderType.TakeAway,
+                    Operator = billing.Operator,
+                    TotalAmount = billing.TotalAmount,
+                    SubTotal = billing.SubTotal,
+                    PaymentMode = billing.PaymentMode,
+                    Notes = billing.Notes,
+                    NoOfPerson = null,
+                    orderDetails = orderDetails
+                };
+
+                return Tuple.Create(
+                    (int)ApplicationEnum.APIStatus.Success,
+                    "Takeaway order history fetched successfully.",
+                    result
+                );
+            }
+            catch (Exception ex)
+            {
+                #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+                return Tuple.Create(
+                    (int)ApplicationEnum.APIStatus.Failed,
+                    ex.Message,
+                    (ViewOrderHistory)null
+                );
+                #pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
+            }
+        }
+
+        public async Task<Tuple<int, string, ViewOrderHistory>> ViewKOTOrderHistoryAsync(string ticketNo)
+        {
+            using var connection = _context.CreateConnection();
+            if (connection.State == ConnectionState.Closed)
+                connection.Open(); // ✅ fixed
+
+            try
+            {
+                const string orderQuery = @"
+                    SELECT 
+                        TicketNo,
+                        TableNo AS [Table],
+                        Operator,
+                        GrandTotal AS TotalAmount,
+                        NoOfPerson,
+                        TaxType,
+                        TicketNote AS Notes,
+                        GroupName AS OrderType
+                    FROM RestaurantPOS_OrderInfoKOT
+                    WHERE RTRIM(TicketNo) = @TicketNo;";
+
+                var orderInfo = await connection.QueryFirstOrDefaultAsync(orderQuery, new { TicketNo = ticketNo });
+
+                if (orderInfo == null)
+                {
+                    return Tuple.Create(
+                        (int)ApplicationEnum.APIStatus.Failed,
+                        "No KOT order found for the given TicketNo.",
+                        (ViewOrderHistory)null
+                    );
+                }
+
+                const string orderItemsQuery = @"
+                    SELECT 
+                        Dish,
+                        Rate,
+                        Quantity,
+                        Amount,
+                        VATPer,
+                        VATAmount,
+                        STPer,
+                        STAmount,
+                        SCPer,
+                        SCAmount,
+                        DiscountPer,
+                        DiscountAmount,
+                        Notes,
+                        Category,
+                        CAST(ISNULL(isComboDeal, 0) AS bit) AS isComboDeal
+                    FROM RestaurantPOS_OrderedProductKOT
+                    WHERE TicketID = (
+                        SELECT TOP 1 ID FROM RestaurantPOS_OrderInfoKOT WHERE RTRIM(TicketNo) = @TicketNo
+                    );";
+
+                var orderDetails = (await connection.QueryAsync<OrderDetailHistory>(orderItemsQuery, new { TicketNo = ticketNo })).ToList();
+
+                // ✅ Explicitly declare type
+                OrderType oType;
+                Enum.TryParse<OrderType>(orderInfo.OrderType?.ToString() ?? "DineIn", out oType);
+
+                var result = new ViewOrderHistory
+                {
+                    Table = orderInfo.Table,
+                    orderType = oType,
+                    Operator = orderInfo.Operator,
+                    TotalAmount = orderInfo.TotalAmount,
+                    SubTotal = orderInfo.TotalAmount,
+                    PaymentMode = "N/A",
+                    Notes = orderInfo.Notes,
+                    NoOfPerson = orderInfo.NoOfPerson,
+                    orderDetails = orderDetails
+                };
+
+                return Tuple.Create(
+                    (int)ApplicationEnum.APIStatus.Success,
+                    "KOT order history fetched successfully.",
+                    result
+                );
+            }
+            catch (Exception ex)
+            {
+                return Tuple.Create(
+                    (int)ApplicationEnum.APIStatus.Failed,
+                    ex.Message,
+                    (ViewOrderHistory)null
+                );
+            }
+        }
+
         public async Task<Tuple<int, string, ViewOrder>> ViewOrderAsync(string ticketNo)
         {
             using var connection = _context.CreateConnection();
@@ -721,5 +895,248 @@ namespace iLinkProRestorentAPI.Repositories
                 return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (ViewOrder)null);
             }
         }
+
+        #region Edit Items
+
+        public async Task<Tuple<int, string, OrderResponse>> UpdateOrderAsync(OrderMaster order, string originalOrderId, bool isTakeAway = false)
+        {
+            using var connection = _context.CreateConnection();
+            if (connection.State == ConnectionState.Closed)
+                connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // 1️⃣ Basic validation
+                if (order.orderDetails == null || !order.orderDetails.Any())
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "No items added", (OrderResponse)null);
+
+                if (!isTakeAway && string.IsNullOrWhiteSpace(order.Table))
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Table not selected", (OrderResponse)null);
+
+                // 2️⃣ Retrieve and store original order info before deletion
+                var originalOrderInfo = await GetOriginalOrderInfo(connection, transaction, originalOrderId, isTakeAway);
+                if (originalOrderInfo == null)
+                    return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, "Original order not found", (OrderResponse)null);
+
+                // 3️⃣ Revert original quantities (add back to stock)
+                await RevertOriginalOrder(connection, transaction, originalOrderId, isTakeAway);
+
+                // 4️⃣ Delete original order records
+                await DeleteOriginalOrder(connection, transaction, originalOrderId, isTakeAway);
+
+                // 5️⃣ Validate stock availability for new quantities
+                var validationResult = await ValidateStockAvailability(connection, transaction, order.orderDetails);
+                if (validationResult != null)
+                    return validationResult;
+
+                // 6️⃣ Create new order (reuse your existing insert methods)
+                Tuple<int, string, OrderResponse> result;
+                if (isTakeAway)
+                {
+                    result = await InsertTakeAwayOrderAsync(order);
+                }
+                else
+                {
+                    result = await InsertOrderAsync(order);
+                }
+
+                // If new order creation failed, rollback everything
+                if (result.Item1 != (int)ApplicationEnum.APIStatus.Success)
+                {
+                    transaction.Rollback();
+                    return result;
+                }
+
+                // 7️⃣ Commit transaction
+                transaction.Commit();
+
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Success, "Order updated successfully", result.Item3);
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                return Tuple.Create((int)ApplicationEnum.APIStatus.Failed, ex.Message, (OrderResponse)null);
+            }
+        }
+
+        // Helper method to get original order information
+        private async Task<dynamic> GetOriginalOrderInfo(IDbConnection connection, IDbTransaction transaction, string orderId, bool isTakeAway)
+        {
+            if (isTakeAway)
+            {
+                const string query = @"
+            SELECT ID, BillNo, TableNo, Operator, BillDate
+            FROM RestaurantPOS_BillingInfoTA 
+            WHERE BillNo = @OrderId";
+
+                return await connection.QueryFirstOrDefaultAsync(query, new { OrderId = orderId }, transaction);
+            }
+            else
+            {
+                const string query = @"
+            SELECT ID, TicketNo, TableNo, Operator, BillDate
+            FROM RestaurantPOS_OrderInfoKOT 
+            WHERE TicketNo = @OrderId";
+
+                return await connection.QueryFirstOrDefaultAsync(query, new { OrderId = orderId }, transaction);
+            }
+        }
+
+        // Helper method to revert original quantities
+        private async Task RevertOriginalOrder(IDbConnection connection, IDbTransaction transaction, string orderId, bool isTakeAway)
+        {
+            // Get original items first
+            var originalItems = await GetOriginalOrderItems(connection, transaction, orderId, isTakeAway);
+
+            if (originalItems == null || !originalItems.Any())
+                return;
+
+            // Revert finished goods stock
+            const string revertStock = "UPDATE Temp_Stock_Store SET Qty = Qty + @Qty WHERE Dish = @Dish";
+
+            foreach (var item in originalItems)
+            {
+                await connection.ExecuteAsync(revertStock, new { Dish = item.Dish, Qty = item.Quantity }, transaction);
+            }
+
+            // For takeaway orders, also revert raw materials
+            if (isTakeAway)
+            {
+                await RevertRawMaterials(connection, transaction, originalItems);
+            }
+
+            // Revert table status for dine-in orders
+            if (!isTakeAway)
+            {
+                var originalOrderInfo = await GetOriginalOrderInfo(connection, transaction, orderId, isTakeAway);
+                if (originalOrderInfo != null)
+                {
+                    const string revertTable = "UPDATE R_Table SET BkColor = @Color WHERE TableNo = @TableNo";
+                    await connection.ExecuteAsync(revertTable, new { Color = Color.Green.ToArgb(), TableNo = originalOrderInfo.TableNo }, transaction);
+                }
+            }
+        }
+
+        // Helper method to get original order items
+        private async Task<List<OrderDetail>> GetOriginalOrderItems(IDbConnection connection, IDbTransaction transaction, string orderId, bool isTakeAway)
+        {
+            if (isTakeAway)
+            {
+                const string query = @"
+                SELECT Dish, Quantity, Rate, Amount, DiscountPer, DiscountAmount, 
+                       STPer, STAmount, VATPer, VATAmount, SCPer, SCAmount, 
+                       Notes, Category, isComboDeal
+                FROM RestaurantPOS_OrderedProductBillTA 
+                WHERE BillID = (SELECT ID FROM RestaurantPOS_BillingInfoTA WHERE BillNo = @OrderId)";
+
+                var result = await connection.QueryAsync<OrderDetail>(query, new { OrderId = orderId }, transaction);
+                return result.AsList();
+            }
+            else
+            {
+                const string query = @"
+                SELECT Dish, Quantity, Rate, Amount, DiscountPer, DiscountAmount, 
+                       STPer, STAmount, VATPer, VATAmount, SCPer, SCAmount, 
+                       Notes, Category, isComboDeal
+                FROM RestaurantPOS_OrderedProductKOT 
+                WHERE TicketID = (SELECT ID FROM RestaurantPOS_OrderInfoKOT WHERE TicketNo = @OrderId)";
+
+                var result = await connection.QueryAsync<OrderDetail>(query, new { OrderId = orderId }, transaction);
+                return result.AsList();
+            }
+        }
+
+        // Helper method to revert raw materials for takeaway orders
+        private async Task RevertRawMaterials(IDbConnection connection, IDbTransaction transaction, List<OrderDetail> originalItems)
+        {
+            const string recipeQuery = @"
+            SELECT RJ.ProductID, RJ.Quantity
+            FROM Recipe R
+            INNER JOIN Recipe_Join RJ ON R.R_ID = RJ.RecipeID
+            WHERE R.Dish = @Dish";
+
+            foreach (var item in originalItems)
+            {
+                var recipeItems = await connection.QueryAsync(recipeQuery, new { Dish = item.Dish }, transaction);
+
+                foreach (var rm in recipeItems)
+                {
+                    decimal revertedQty = (decimal)rm.Quantity * item.Quantity;
+                    const string revertRMStock = "UPDATE Temp_Stock_RM SET Qty = Qty + @Qty WHERE ProductID = @ProductID";
+                    await connection.ExecuteAsync(revertRMStock, new { Qty = revertedQty, ProductID = rm.ProductID }, transaction);
+                }
+            }
+        }
+
+        // Helper method to delete original order
+        private async Task DeleteOriginalOrder(IDbConnection connection, IDbTransaction transaction, string orderId, bool isTakeAway)
+        {
+            if (isTakeAway)
+            {
+                // Delete from related tables first
+                const string deleteOrderedItems = @"
+                DELETE FROM RestaurantPOS_OrderedProductBillTA 
+                WHERE BillID = (SELECT ID FROM RestaurantPOS_BillingInfoTA WHERE BillNo = @OrderId)";
+
+                const string deleteBillingInfo = "DELETE FROM RestaurantPOS_BillingInfoTA WHERE BillNo = @OrderId";
+
+                const string deleteRMUsedJoin = @"
+                DELETE FROM RM_Used_Join 
+                WHERE RawMaterialID = (SELECT RM_ID FROM RM_Used WHERE BillNo = @OrderId)";
+
+                const string deleteRMUsed = "DELETE FROM RM_Used WHERE BillNo = @OrderId";
+
+                const string deleteTblOrder = "DELETE FROM tblOrder WHERE BillNo = @OrderId";
+
+                await connection.ExecuteAsync(deleteOrderedItems, new { OrderId = orderId }, transaction);
+                await connection.ExecuteAsync(deleteRMUsedJoin, new { OrderId = orderId }, transaction);
+                await connection.ExecuteAsync(deleteRMUsed, new { OrderId = orderId }, transaction);
+                await connection.ExecuteAsync(deleteTblOrder, new { OrderId = orderId }, transaction);
+                await connection.ExecuteAsync(deleteBillingInfo, new { OrderId = orderId }, transaction);
+            }
+            else
+            {
+                // Delete dine-in order
+                const string deleteOrderedItems = @"
+                DELETE FROM RestaurantPOS_OrderedProductKOT 
+                WHERE TicketID = (SELECT ID FROM RestaurantPOS_OrderInfoKOT WHERE TicketNo = @OrderId)";
+
+                const string deleteOrderInfo = "DELETE FROM RestaurantPOS_OrderInfoKOT WHERE TicketNo = @OrderId";
+
+                await connection.ExecuteAsync(deleteOrderedItems, new { OrderId = orderId }, transaction);
+                await connection.ExecuteAsync(deleteOrderInfo, new { OrderId = orderId }, transaction);
+            }
+        }
+
+        // Helper method to validate stock availability
+        private async Task<Tuple<int, string, OrderResponse>> ValidateStockAvailability(IDbConnection connection, IDbTransaction transaction, List<OrderDetail> orderDetails)
+        {
+            foreach (var group in orderDetails.GroupBy(o => o.Dish))
+            {
+                const string sqlQty = "SELECT Qty FROM Temp_Stock_Store WHERE Dish = @Dish";
+                decimal availableQty = await connection.ExecuteScalarAsync<decimal?>(
+                    sqlQty,
+                    new { Dish = group.Key },
+                    transaction: transaction
+                ) ?? 0;
+
+                decimal requestedQty = group.Sum(x => x.Quantity);
+
+                // Uncomment if you want to enforce stock validation
+                // if (requestedQty > availableQty)
+                // {
+                //     return Tuple.Create(
+                //         (int)ApplicationEnum.APIStatus.Failed,
+                //         $"Added qty ({requestedQty}) more than available ({availableQty}) for '{group.Key}'",
+                //         (OrderResponse)null);
+                // }
+            }
+
+            return null; // Validation passed
+        }
+
+        #endregion
     }
 }

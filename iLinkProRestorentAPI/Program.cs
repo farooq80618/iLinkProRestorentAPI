@@ -8,6 +8,7 @@ using iLinkProRestorentAPI.Interfaces;
 using iLinkProRestorentAPI.Interfaces.DBRepository;
 using iLinkProRestorentAPI.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -16,6 +17,31 @@ using System.Text;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ✅ Configure Data Protection to fix warnings
+var dataProtectionPath = Path.Combine(builder.Environment.ContentRootPath, "DataProtection-Keys");
+var directory = new DirectoryInfo(dataProtectionPath);
+
+if (!directory.Exists)
+{
+    directory.Create();
+}
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(directory)
+    .SetApplicationName("iLinkProRestorentApp")
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90))
+    .ProtectKeysWithDpapi(); // Windows DPAPI encryption
+
+// ✅ Configure TLS 1.2+ to fix security warning
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ConfigureHttpsDefaults(httpsOptions =>
+    {
+        httpsOptions.SslProtocols = System.Security.Authentication.SslProtocols.Tls12 |
+                                   System.Security.Authentication.SslProtocols.Tls13;
+    });
+});
 
 builder.Services.AddAuthentication(options =>
 {
@@ -66,7 +92,7 @@ builder.Services.AddSingleton(typeof(IConverter), new SynchronizedConverter(new 
 
 builder.Services.AddSingleton<DapperContext>();
 builder.Services.AddScoped<ILoginRepository, LoginRepository>();
-builder.Services.AddScoped<IPOSMainRepository , POSMainRepository>();
+builder.Services.AddScoped<IPOSMainRepository, POSMainRepository>();
 builder.Services.AddScoped<EmailTemplate>();
 builder.Services.AddScoped<GenerateEmail>();
 
@@ -143,13 +169,13 @@ var app = builder.Build();
 
 //if (app.Environment.IsDevelopment())
 //{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+app.UseSwagger();
+app.UseSwaggerUI();
 //}
 
 //app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
-app.UseAuthentication(); 
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapControllers();

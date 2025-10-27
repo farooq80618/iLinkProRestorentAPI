@@ -13,5 +13,8 @@ namespace iLinkProRestorentAPI.Interfaces
         Task<Tuple<int, string, OrderResponse>> InsertOrderAsync(OrderMaster order);
         Task<Tuple<int, string, OrderResponse>> InsertTakeAwayOrderAsync(OrderMaster order);
         Task<Tuple<int, string, ViewOrder>> ViewOrderAsync(string ticketNo);
+        Task<Tuple<int, string, ViewOrderHistory>> ViewTakeAwayOrderHistoryAsync(string ticketNo);
+        Task<Tuple<int, string, ViewOrderHistory>> ViewKOTOrderHistoryAsync(string ticketNo);
+        Task<Tuple<int, string, OrderResponse>> UpdateOrderAsync(OrderMaster order, string originalOrderId, bool isTakeAway = false);
     }
 }
