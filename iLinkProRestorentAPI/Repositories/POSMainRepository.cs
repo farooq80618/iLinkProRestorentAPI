@@ -662,8 +662,9 @@ namespace iLinkProRestorentAPI.Repositories
             try
             {
                 // 1️⃣ Fetch billing info
-                const string billingQuery = @"
-                    SELECT 
+                string billingQuery = @$"
+                    SELECT
+                        Id,
                         BillNo,
                         Operator,
                         GrandTotal AS TotalAmount,
@@ -671,7 +672,7 @@ namespace iLinkProRestorentAPI.Repositories
                         PaymentMode,
                         BillNote AS Notes
                     FROM RestaurantPOS_BillingInfoTA
-                    WHERE ID = @TicketNo";
+                    WHERE BillNo = '{ticketNo}'";
 
                 var billing = await connection.QueryFirstOrDefaultAsync(billingQuery, new { TicketNo = ticketNo });
 
@@ -684,7 +685,7 @@ namespace iLinkProRestorentAPI.Repositories
 
                 // 2️⃣ Fetch ordered items
                 const string orderItemsQuery = @"
-                    SELECT 
+                    SELECT
                         Dish,
                         Rate,
                         Quantity,
@@ -703,7 +704,7 @@ namespace iLinkProRestorentAPI.Repositories
                     FROM RestaurantPOS_OrderedProductBillTA
                     WHERE BillID = @TicketNo";
 
-                var orderDetails = (await connection.QueryAsync<OrderDetailHistory>(orderItemsQuery, new { TicketNo = ticketNo })).ToList();
+                var orderDetails = (await connection.QueryAsync<OrderDetailHistory>(orderItemsQuery, new { TicketNo = billing.Id })).ToList();
 
                 // 3️⃣ Map to ViewOrderHistory object
                 var result = new ViewOrderHistory
@@ -727,13 +728,13 @@ namespace iLinkProRestorentAPI.Repositories
             }
             catch (Exception ex)
             {
-                #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
                 return Tuple.Create(
                     (int)ApplicationEnum.APIStatus.Failed,
                     ex.Message,
                     (ViewOrderHistory)null
                 );
-                #pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
+#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
             }
         }
 
@@ -746,7 +747,7 @@ namespace iLinkProRestorentAPI.Repositories
             try
             {
                 const string orderQuery = @"
-                    SELECT 
+                    SELECT
                         TicketNo,
                         TableNo AS [Table],
                         Operator,
@@ -770,7 +771,7 @@ namespace iLinkProRestorentAPI.Repositories
                 }
 
                 const string orderItemsQuery = @"
-                    SELECT 
+                    SELECT
                         Dish,
                         Rate,
                         Quantity,
@@ -835,7 +836,7 @@ namespace iLinkProRestorentAPI.Repositories
             try
             {
                 string headerQuery = @"
-                    SELECT DISTINCT 
+                    SELECT DISTINCT
                         RTRIM(TicketNo) AS TicketNo,
                         RTRIM(TableNo) AS TableNo,
                         RTRIM(KOT_Status) AS OrderStatus,
@@ -846,7 +847,7 @@ namespace iLinkProRestorentAPI.Repositories
 
                     UNION
 
-                    SELECT DISTINCT 
+                    SELECT DISTINCT
                         RTRIM(BillNo) AS TicketNo,
                         'TakeAway' AS TableNo,
                         RTRIM(TA_Status) AS OrderStatus,
@@ -864,7 +865,7 @@ namespace iLinkProRestorentAPI.Repositories
                 }
 
                 string detailQuery = @"
-                    SELECT DISTINCT 
+                    SELECT DISTINCT
                         RTRIM(RestaurantPOS_OrderedProductKOT.Dish) AS Dish,
                         Quantity,
                         RTRIM(RestaurantPOS_OrderedProductKOT.Notes) AS Notes,
@@ -875,7 +876,7 @@ namespace iLinkProRestorentAPI.Repositories
 
                     UNION
 
-                    SELECT DISTINCT 
+                    SELECT DISTINCT
                         RTRIM(RestaurantPOS_OrderedProductBillTA.Dish) AS Dish,
                         Quantity,
                         RTRIM(RestaurantPOS_OrderedProductBillTA.Notes) AS Notes,
